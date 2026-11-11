@@ -5,10 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Облік технічних форм - UKRAINE GTA</title>
     <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
+<!-- Экран входа с капчей -->
+    <div id="auth-screen" class="fixed inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center space-y-6">
+            <h1 class="text-2xl font-bold text-blue-400">UKRAINE GTA</h1>
+            <p class="text-sm text-slate-300">Будь ласка, підтвердіть, що ви не робот, щоб увійти в систему обліку форм.</p>
+            
+            <div class="flex justify-center my-4">
+                <div class="g-recaptcha" data-sitekey="6LcgmbsuAAAAABSXhGegKljaefZb_HzFZ-XE-A79"></div>
+            </div>
 
-    <div class="flex h-screen overflow-hidden">
+            <button onclick="verifyCaptcha()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl transition shadow cursor-pointer">
+                Увійти на сайт
+            </button>
+        </div>
+    </div>
+    <div id="main-app" class="flex h-screen overflow-hidden hidden">
         <!-- Sidebar -->
         <aside class="w-72 bg-slate-800 border-r border-slate-700 flex flex-col">
             <div class="p-5 border-b border-slate-700">
@@ -544,6 +559,18 @@
 
         function closeImageModal() {
             document.getElementById('image-modal').classList.add('hidden');
+        }
+        function verifyCaptcha() {
+            const recaptchaResponse = grecaptcha.getResponse();
+            
+            if (!recaptchaResponse) {
+                alert("Будь ласка, підтвердіть капчу («Я не робот»)!");
+                return;
+            }
+
+            // Ховаємо екран входу і показуємо основний сайт
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
         }
     </script>
 </body>
