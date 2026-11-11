@@ -944,7 +944,6 @@ function renderForms() {
 
     container.innerHTML = '';
     
-    // Припустимо, що forms — це масив твоїх збережених даних з localStorage
     if (forms.length === 0) {
         container.innerHTML = '<p class="text-slate-400 text-center py-8">Немає збережених форм.</p>';
         return;
@@ -954,6 +953,17 @@ function renderForms() {
         const card = document.createElement('div');
         card.className = 'bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg space-y-4';
         
+        // Перевіряємо, чи форма заблокована (якщо статус вже Прийнято або Відмовлено)
+        const isClosed = f.status === 'Прийнято' || f.status === 'Відмовлено';
+        
+        // Визначаємо колір бейджа статусу
+        let statusBadge = '<span class="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-lg">На розгляді</span>';
+        if (f.status === 'Прийнято') {
+            statusBadge = '<span class="text-xs px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg">Прийнято</span>';
+        } else if (f.status === 'Відмовлено') {
+            statusBadge = '<span class="text-xs px-2.5 py-1 bg-red-500/20 text-red-400 rounded-lg">Відмовлено</span>';
+        }
+
         card.innerHTML = `
             <div class="flex justify-between items-start">
                 <span class="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full">${f.type || 'Форма'}</span>
@@ -978,13 +988,28 @@ function renderForms() {
             </div>
 
             <div class="flex justify-between items-center pt-2">
-                <span class="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-lg">На розгляді</span>
+                <div class="flex items-center space-x-2">
+                    ${statusBadge}
+                    <!-- Випадаючий список для зміни статусу (блокується, якщо вже закрито) -->
+                    <select onchange="updateStatus(${index}, this.value)" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded px-2 py-1 outline-none ${isClosed ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" ${isClosed ? 'disabled' : ''}>
+                        <option value="На розгляді" ${f.status === 'На розгляді' ? 'selected' : ''}>На розгляді</option>
+                        <option value="Прийнято" ${f.status === 'Прийнято' ? 'selected' : ''}>Прийнято</option>
+                        <option value="Відмовлено" ${f.status === 'Відмовлено' ? 'selected' : ''}>Відмовлено</g5:option>
+                    </select>
+                </div>
                 <button onclick="deleteForm(${index})" class="text-xs text-red-400 hover:text-red-300 transition cursor-pointer">Видалити</button>
             </div>
         `;
         
         container.appendChild(card);
     });
+}
+
+// Функція оновлення статусу, яка зберігає вибір у localStorage
+function updateStatus(index, newStatus) {
+    forms[index].status = newStatus;
+    localStorage.setItem('ukraine_gta_forms', JSON.stringify(forms));
+    renderForms();
 }
 
 
