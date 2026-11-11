@@ -1,3 +1,48 @@
+import os
+from flask import Flask, render_template_string, request, jsonify
+import sqlite3
+import json
+
+app = Flask(__name__)
+app.secret_key = 'ukraine_gta_admin_secret_key'
+
+SERVERS = [
+    {"name": "Центральна Україна", "color": "#f97316", "num": "01"},
+    {"name": "Західна Україна", "color": "#0ea5e9", "num": "02"},
+    {"name": "Східна Україна", "color": "#22c55e", "num": "03"},
+    {"name": "Північна Україна", "color": "#8b5cf6", "num": "04"},
+    {"name": "Південна Україна", "color": "#ec4899", "num": "05"},
+    {"name": "Подільський Край", "color": "#14b8a6", "num": "06"},
+    {"name": "Чорноморський Край", "color": "#3b82f6", "num": "07"}
+]
+
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS forms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            server INTEGER NOT NULL,
+            server_name TEXT NOT NULL,
+            server_color TEXT NOT NULL,
+            server_num TEXT NOT NULL,
+            contacts TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reason TEXT,
+            form_data TEXT NOT NULL,
+            images TEXT NOT NULL,
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="uk">
 <head>
@@ -5,63 +50,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Облік технічних форм - UKRAINE GTA</title>
     <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
-<!-- Экран входа с капчей -->
     <div id="auth-screen" class="fixed inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center p-4">
         <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center space-y-6">
             <h1 class="text-2xl font-bold text-blue-400">UKRAINE GTA</h1>
-            <p class="text-sm text-slate-300">Будь ласка, підтвердіть, що ви не робот, щоб увійти в систему обліку форм.</p>
-            
+            <p class="text-sm text-slate-300">Підтвердіть, що ви не робот, щоб увійти в систему.</p>
             <div class="flex justify-center my-4">
-                <div class="g-recaptcha" data-sitekey="6LcgmBsuAAAAABSxhGegKljaefZb_HzFZ-XE-A79"></div>
+                <div class="g-recaptcha" data-sitekey="6LeRqxsuAAAAAFBKGeXsakIcwgI9AG3_kJUTxX-D"></div>
             </div>
-
-            <button onclick="verifyCaptcha()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl transition shadow cursor-pointer">
-                Увійти на сайт
-            </button>
+            <button onclick="verifyCaptcha()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl transition shadow cursor-pointer">Увійти на сайт</button>
         </div>
     </div>
     <div id="main-app" class="flex h-screen overflow-hidden hidden">
-        <!-- Sidebar -->
         <aside class="w-72 bg-slate-800 border-r border-slate-700 flex flex-col">
             <div class="p-5 border-b border-slate-700">
                 <h1 class="text-lg font-bold text-blue-400">UKRAINE GTA</h1>
                 <p class="text-xs text-slate-400 mt-0.5">Адмін-облік форм</p>
             </div>
-            
-            <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto" id="server-nav">
-                <button onclick="selectServer('all')" id="btn-all" class="w-full text-left px-4 py-2.5 rounded-lg transition font-medium bg-blue-600 text-white shadow text-sm flex items-center gap-2.5">
-                    <span>📋</span> <span>Усі сервери</span>
-                </button>
-                <div class="pt-3 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Сервери</div>
-            </nav>
+            <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto" id="server-nav"></nav>
         </aside>
-
-        <!-- Main Content -->
         <main class="flex-1 flex flex-col overflow-hidden">
             <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center shadow-md">
                 <h2 id="current-view-title" class="text-lg font-semibold text-white flex items-center gap-2"><span>📋</span> Усі сервери</h2>
-                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition shadow flex items-center gap-2 text-sm">
-                    <span>➕ Додати форму</span>
-                </button>
+                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition shadow flex items-center gap-2 text-sm cursor-pointer"><span>➕ Додати форму</span></button>
             </header>
-
             <div class="flex-1 overflow-y-auto p-6">
                 <div id="forms-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-                <div id="empty-state" class="hidden text-center py-20 text-slate-500">
-                    <p class="text-xl">Форм поки немає</p>
-                </div>
+                <div id="empty-state" class="hidden text-center py-20 text-slate-500"><p class="text-xl">Форм поки немає</p></div>
             </div>
         </main>
     </div>
-
-    <!-- Modal -->
     <div id="form-modal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center p-4 z-50">
         <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-2xl w-full p-6 shadow-2xl overflow-y-auto max-h-[95vh]">
             <h3 class="text-xl font-bold mb-4 text-white">Додати нову форму заявки</h3>
-            
             <form id="add-form" onsubmit="handleFormSubmit(event)" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -76,41 +99,23 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1">Сервер</label>
-                        <select id="form-server" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500">
-                        </select>
+                        <select id="form-server" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"></select>
                     </div>
                 </div>
-
-                <!-- Блок контактів та ідентифікаторів -->
                 <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700 space-y-3">
-                    <div class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Дані для зв'язку та тікету (повинно бути заповнено хоча б одне поле)</div>
+                    <div class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Контактні дані або тікет (заповніть хоча б одне)</div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Telegram гравця</label>
-                            <input type="text" id="contact-tg-player" placeholder="@username" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Номер тікету</label>
-                            <input type="text" id="contact-ticket" placeholder="#1234" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Ім'я оператора</label>
-                            <input type="text" id="contact-op-name" placeholder="Ім'я адміністратора" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-300 mb-1">Telegram оператора</label>
-                            <input type="text" id="contact-op-tg" placeholder="@operator_tg" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                        </div>
+                        <div><label class="block text-xs font-semibold text-slate-300 mb-1">Telegram гравця</label><input type="text" id="contact-tg-player" placeholder="@username" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>
+                        <div><label class="block text-xs font-semibold text-slate-300 mb-1">Номер тікету</label><input type="text" id="contact-ticket" placeholder="#1234" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>
+                        <div><label class="block text-xs font-semibold text-slate-300 mb-1">Ім'я оператора</label><input type="text" id="contact-op-name" placeholder="Ім'я" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>
+                        <div><label class="block text-xs font-semibold text-slate-300 mb-1">Telegram оператора</label><input type="text" id="contact-op-tg" placeholder="@operator" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>
                     </div>
                 </div>
-
-                <div id="dynamic-fields-container" class="space-y-3 bg-slate-900/50 p-4 rounded-xl border border-slate-700/60">
-                </div>
-
+                <div id="dynamic-fields-container" class="space-y-3 bg-slate-900/50 p-4 rounded-xl border border-slate-700/60"></div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1">Статус</label>
-                        <select id="form-status" onchange="toggleRejectReason(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500">
+                        <select id="form-status" onchange="toggleRejectReason(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white">
                             <option value="На розгляді">На розгляді</option>
                             <option value="Прийнята">Прийнята</option>
                             <option value="Відмовлена">Відмовлена</option>
@@ -118,28 +123,23 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1">Скріншоти</label>
-                        <input type="file" id="form-images" accept="image/*" multiple class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer">
+                        <input type="file" id="form-images" accept="image/*" multiple class="w-full text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white cursor-pointer">
                     </div>
                 </div>
-
                 <div id="reason-container" class="hidden">
                     <label class="block text-sm font-medium text-rose-400 mb-1">Причина відмови (обов'язково)</label>
-                    <textarea id="form-reason" placeholder="Вкажіть причину..." class="w-full bg-slate-900 border border-rose-700/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-rose-500"></textarea>
+                    <textarea id="form-reason" placeholder="Вкажіть причину..." class="w-full bg-slate-900 border border-rose-700/50 rounded-lg p-2.5 text-white"></textarea>
                 </div>
-
                 <div class="flex justify-end gap-3 pt-4 border-t border-slate-700">
-                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition">Скасувати</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition shadow">Зберегти</button>
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white">Скасувати</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium">Зберегти</button>
                 </div>
             </form>
         </div>
     </div>
-
-    <!-- Image Modal -->
     <div id="image-modal" class="fixed inset-0 bg-black/85 hidden flex items-center justify-center p-4 z-50 cursor-pointer" onclick="closeImageModal()">
         <img id="modal-img" class="max-w-full max-h-[90vh] rounded-lg shadow-2xl">
     </div>
-
     <script>
         const servers = [
             { name: "Центральна Україна", color: "#f97316", num: "01" },
@@ -150,428 +150,200 @@
             { name: "Подільський Край", color: "#14b8a6", num: "06" },
             { name: "Чорноморський Край", color: "#3b82f6", num: "07" }
         ];
-
         function getShieldSvg(color, num) {
-            return `<svg class="w-5 h-5 inline-block shrink-0" viewBox="0 0 24 24" fill="${color}" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 2Z" fill-opacity="0.25"/>
-                <path d="M12 2.5L3.5 5.6V11C3.5 16.2 7.1 21.1 12 22.3C16.9 21.1 20.5 16.2 20.5 11V5.6L12 2.5Z" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-                <text x="12" y="14" fill="#ffffff" font-size="8" font-weight="bold" font-family="sans-serif" text-anchor="middle">${num}</text>
-            </svg>`;
+            return `<svg class="w-5 h-5 inline-block shrink-0" viewBox="0 0 24 24" fill="${color}" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 2Z" fill-opacity="0.25"/><path d="M12 2.5L3.5 5.6V11C3.5 16.2 7.1 21.1 12 22.3C16.9 21.1 20.5 16.2 20.5 11V5.6L12 2.5Z" stroke="${color}" stroke-width="2" stroke-linejoin="round"/><text x="12" y="14" fill="#ffffff" font-size="8" font-weight="bold" font-family="sans-serif" text-anchor="middle">${num}</text></svg>`;
         }
-
-        let currentFilter = 'all'; // 'all' або номер сервера (наприклад, 1)
-        let currentStatusFilter = 'all'; // 'all', 'На розгляді', 'Прийнята', 'Відмовлена'
-        let activeServerDropdown = null; // Зберігає відкритий сервер у меню
-        let forms = JSON.parse(localStorage.getItem('ukraine_gta_forms')) || [];
-
-        window.onload = function() {
-            initApp();
-        };
-
+        let currentFilter = 'all', currentStatusFilter = 'all', activeServerDropdown = null, forms = [];
+        window.onload = async function() { await loadFormsFromServer(); initApp(); };
+        async function loadFormsFromServer() {
+            try { const res = await fetch('/api/forms'); forms = await res.json(); } catch (e) {}
+        }
         function initApp() {
             const selectServerEl = document.getElementById('form-server');
             selectServerEl.innerHTML = '';
-
             servers.forEach((srv, index) => {
                 const srvNum = index + 1;
                 const opt = document.createElement('option');
-                opt.className = "dyn-item";
                 opt.value = srvNum;
                 opt.innerText = `${srvNum}. ${srv.name}`;
                 selectServerEl.appendChild(opt);
             });
-
             renderSidebar();
             renderDynamicFields(document.getElementById('form-type').value);
             renderForms();
         }
-
         function renderSidebar() {
             const nav = document.getElementById('server-nav');
-            
-            // Зберігаємо кнопку «Усі сервери» та заголовок
-            nav.innerHTML = `
-                <button onclick="selectServer('all')" id="btn-all" class="w-full text-left px-4 py-2.5 rounded-lg transition font-medium ${currentFilter === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700 hover:text-white'} text-sm flex items-center gap-2.5">
-                    <span>📋</span> <span>Усі сервери</span>
-                </button>
-                <div class="pt-3 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Сервери</div>
-            `;
-
+            nav.innerHTML = `<button onclick="selectServer('all')" class="w-full text-left px-4 py-2.5 rounded-lg font-medium ${currentFilter === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700'} text-sm flex items-center gap-2.5"><span>📋</span> <span>Усі сервери</span></button><div class="pt-3 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Сервери</div>`;
             servers.forEach((srv, index) => {
-                const srvNum = index + 1;
-                const isSelected = currentFilter === srvNum;
-                const isOpen = activeServerDropdown === srvNum;
-
-                const serverContainer = document.createElement('div');
-                serverContainer.className = "space-y-1";
-
-                // Головна кнопка сервера
-                const btn = document.createElement('button');
-                btn.className = `w-full text-left px-4 py-2.5 rounded-lg transition font-medium text-sm flex items-center justify-between ${isSelected ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`;
-                btn.innerHTML = `
-                    <span class="flex items-center gap-2.5 truncate">
-                        <span>${getShieldSvg(srv.color, srv.num)}</span> 
-                        <span class="truncate">${srvNum}. ${srv.name}</span>
-                    </span>
-                    <span class="text-xs transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}">▶</span>
-                `;
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    toggleServerDropdown(srvNum);
-                };
-                serverContainer.appendChild(btn);
-
-                // Міні-список статусів (розгортається)
+                const srvNum = index + 1, isSelected = currentFilter === srvNum, isOpen = activeServerDropdown === srvNum;
+                const div = document.createElement('div');
+                div.className = "space-y-1";
+                div.innerHTML = `<button onclick="toggleServerDropdown(${srvNum})" class="w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm flex items-center justify-between ${isSelected ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700'}"><span class="flex items-center gap-2.5 truncate"><span>${getShieldSvg(srv.color, srv.num)}</span> <span class="truncate">${srvNum}. ${srv.name}</span></span><span class="text-xs transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}">▶</span></button>`;
                 if (isOpen) {
-                    const subMenu = document.createElement('div');
-                    subMenu.className = "pl-8 pr-2 space-y-1 py-1 border-l-2 border-blue-500/40 ml-4 my-1";
-                    
-                    const statuses = [
-                        { label: "Усі статуси", val: "all", icon: "📌" },
-                        { label: "На розгляді", val: "На розгляді", icon: "⏳" },
-                        { label: "Прийняті", val: "Прийнята", icon: "✅" },
-                        { label: "Відмовлені", val: "Відмовлена", icon: "❌" }
-                    ];
-
-                    statuses.forEach(st => {
-                        const isSubSelected = isSelected && currentStatusFilter === st.val;
-                        const subBtn = document.createElement('button');
-                        subBtn.className = `w-full text-left px-3 py-1.5 rounded-md text-xs transition flex items-center gap-2 ${isSubSelected ? 'bg-blue-500/30 text-blue-300 font-semibold' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`;
-                        subBtn.innerHTML = `<span>${st.icon}</span> <span>${st.label}</span>`;
-                        subBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            filterByServerAndStatus(srvNum, st.val);
-                        };
-                        subMenu.appendChild(subBtn);
+                    const sub = document.createElement('div');
+                    sub.className = "pl-8 pr-2 space-y-1 py-1 border-l-2 border-blue-500/40 ml-4 my-1";
+                    [{label:"Усі статуси",val:"all",icon:"📌"},{label:"На розгляді",val:"На розгляді",icon:"⏳"},{label:"Прийняті",val:"Прийнята",icon:"✅"},{label:"Відмовлені",val:"Відмовлена",icon:"❌"}].forEach(st => {
+                        sub.innerHTML += `<button onclick="filterByServerAndStatus(${srvNum}, '${st.val}')" class="w-full text-left px-3 py-1.5 rounded-md text-xs transition flex items-center gap-2 ${isSelected && currentStatusFilter === st.val ? 'bg-blue-500/30 text-blue-300 font-semibold' : 'text-slate-400 hover:bg-slate-700'}"><span>${st.icon}</span> <span>${st.label}</span></button>`;
                     });
-
-                    serverContainer.appendChild(subMenu);
+                    div.appendChild(sub);
                 }
-
-                nav.appendChild(serverContainer);
+                nav.appendChild(div);
             });
         }
-
-        function toggleServerDropdown(serverNum) {
-            if (activeServerDropdown === serverNum) {
-                activeServerDropdown = null;
-            } else {
-                activeServerDropdown = serverNum;
-                selectServer(serverNum, 'all'); // При кліку на сервер вибираємо його та скидаємо статус на "усі"
-            }
+        function toggleServerDropdown(srvNum) {
+            activeServerDropdown = (activeServerDropdown === srvNum) ? null : srvNum;
+            selectServer(srvNum, 'all');
             renderSidebar();
         }
-
         function selectServer(server, status = 'all') {
-            currentFilter = server;
-            currentStatusFilter = status;
-            if (server === 'all') {
-                activeServerDropdown = null;
-                currentStatusFilter = 'all';
-                document.getElementById('current-view-title').innerHTML = "<span>📋</span> Усі сервери";
-            } else {
-                const srv = servers[server - 1];
-                document.getElementById('current-view-title').innerHTML = `<span class="flex items-center">${getShieldSvg(srv.color, srv.num)}</span> <span>${server}. ${srv.name} ${currentStatusFilter !== 'all' ? `(${currentStatusFilter})` : ''}</span>`;
-            }
-            renderSidebar();
-            renderForms();
+            currentFilter = server; currentStatusFilter = status;
+            if (server === 'all') { activeServerDropdown = null; document.getElementById('current-view-title').innerHTML = "<span>📋</span> Усі сервери"; }
+            else { const srv = servers[server - 1]; document.getElementById('current-view-title').innerHTML = `<span>${getShieldSvg(srv.color, srv.num)}</span> <span>${server}. ${srv.name}</span>`; }
+            renderSidebar(); renderForms();
         }
-
         function filterByServerAndStatus(serverNum, statusVal) {
-            currentFilter = serverNum;
-            currentStatusFilter = statusVal;
+            currentFilter = serverNum; currentStatusFilter = statusVal;
             const srv = servers[serverNum - 1];
-            let statusText = statusVal === 'all' ? '' : ` (${statusVal})`;
-            document.getElementById('current-view-title').innerHTML = `<span class="flex items-center">${getShieldSvg(srv.color, srv.num)}</span> <span>${serverNum}. ${srv.name}${statusText}</span>`;
-            renderSidebar();
-            renderForms();
+            document.getElementById('current-view-title').innerHTML = `<span>${getShieldSvg(srv.color, srv.num)}</span> <span>${serverNum}. ${srv.name} (${statusVal})</span>`;
+            renderSidebar(); renderForms();
         }
-
         function renderDynamicFields(type) {
-            const container = document.getElementById('dynamic-fields-container');
-            container.innerHTML = '';
-
-            let html = `
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">1. Дані акаунту (сервер, нікнейм, ID акаунту):</label>
-                    <input type="text" id="f-account" required placeholder="Нікнейм [ID]" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">2. ІР адреса (https://2ip.ua/ua/):</label>
-                    <input type="text" id="f-ip" required placeholder="IP адреса" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">3. Наявні докази (відео/скріншоти/особистий кабінет):</label>
-                    <input type="text" id="f-proofs" required placeholder="Посилання або опис" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">4. Прив'язана електронна пошта:</label>
-                    <input type="text" id="f-email" required placeholder="email@gmail.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                </div>
-            `;
-
-            if (type === 'Зміна електронної пошти') {
-                html += `
-                    <div>
-                        <label class="block text-xs font-semibold text-blue-400 mb-1">5. Ваша нова електронна пошта:</label>
-                        <input type="text" id="f-new-email" required placeholder="new@gmail.com" class="w-full bg-slate-900 border border-blue-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                    </div>
-                `;
-            }
-
-            html += `
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">${type === 'Зміна електронної пошти' ? '6' : '5'}. SERIAL ID (F8 -> serial):</label>
-                    <input type="text" id="f-serial" required placeholder="SERIAL ID" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">${type === 'Зміна електронної пошти' ? '7' : '6'}. Launcher ID (шестерня лаунчера):</label>
-                    <input type="text" id="f-launcher" required placeholder="Launcher ID" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                </div>
-            `;
-
-            if (type !== 'Відключення заборони гри з іншого пристрою') {
-                html += `
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">${type === 'Зміна електронної пошти' ? '8' : '7'}. Останні 4 цифри телефону:</label>
-                        <input type="text" id="f-phone" maxlength="4" required placeholder="1234" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                    </div>
-                `;
-            }
-
-            container.innerHTML = html;
+            const c = document.getElementById('dynamic-fields-container');
+            c.innerHTML = `<div><label class="block text-xs font-semibold text-slate-300 mb-1">1. Дані акаунту:</label><input type="text" id="f-account" required placeholder="Нікнейм [ID]" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>` +
+                        `<div><label class="block text-xs font-semibold text-slate-300 mb-1">2. IP адреса:</label><input type="text" id="f-ip" required placeholder="IP" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>` +
+                        `<div><label class="block text-xs font-semibold text-slate-300 mb-1">3. Докази:</label><input type="text" id="f-proofs" required placeholder="Посилання" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>` +
+                        `<div><label class="block text-xs font-semibold text-slate-300 mb-1">4. Пошта:</label><input type="text" id="f-email" required placeholder="email@gmail.com" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>`;
+            if (type === 'Зміна електронної пошти') c.innerHTML += `<div><label class="block text-xs font-semibold text-blue-400 mb-1">5. Нова пошта:</label><input type="text" id="f-new-email" required placeholder="new@gmail.com" class="w-full bg-slate-900 border border-blue-700 rounded-lg p-2 text-sm text-white"></div>`;
+            c.innerHTML += `<div><label class="block text-xs font-semibold text-slate-300 mb-1">SERIAL ID:</label><input type="text" id="f-serial" required placeholder="Serial" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>` +
+                           `<div><label class="block text-xs font-semibold text-slate-300 mb-1">Launcher ID:</label><input type="text" id="f-launcher" required placeholder="Launcher" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>`;
+            if (type !== 'Відключення заборони гри з іншого пристрою') c.innerHTML += `<div><label class="block text-xs font-semibold text-slate-300 mb-1">Останні 4 цифри телефону:</label><input type="text" id="f-phone" maxlength="4" required placeholder="1234" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white"></div>`;
         }
-
         function toggleRejectReason(status) {
-            const reasonContainer = document.getElementById('reason-container');
-            if (status === 'Відмовлена') {
-                reasonContainer.classList.remove('hidden');
-                document.getElementById('form-reason').required = true;
-            } else {
-                reasonContainer.classList.add('hidden');
-                document.getElementById('form-reason').required = false;
-            }
+            const r = document.getElementById('reason-container');
+            if (status === 'Відмовлена') { r.classList.remove('hidden'); document.getElementById('form-reason').required = true; }
+            else { r.classList.add('hidden'); document.getElementById('form-reason').required = false; }
         }
-
-        function openModal() {
-            document.getElementById('form-modal').classList.remove('hidden');
-        }
-
-        function closeModal() {
-            document.getElementById('form-modal').classList.add('hidden');
-            document.getElementById('add-form').reset();
-            renderDynamicFields(document.getElementById('form-type').value);
-            document.getElementById('reason-container').classList.add('hidden');
-        }
-
-        function handleFormSubmit(e) {
+        function openModal() { document.getElementById('form-modal').classList.remove('hidden'); }
+        function closeModal() { document.getElementById('form-modal').classList.add('hidden'); document.getElementById('add-form').reset(); }
+        async function handleFormSubmit(e) {
             e.preventDefault();
-            
             const tgPlayer = document.getElementById('contact-tg-player').value.trim();
             const ticket = document.getElementById('contact-ticket').value.trim();
             const opName = document.getElementById('contact-op-name').value.trim();
             const opTg = document.getElementById('contact-op-tg').value.trim();
-
-            if (!tgPlayer && !ticket && !opName && !opTg) {
-                alert("Помилка: потрібно заповнити хоча б одне поле для зв'язку або тікету!");
-                return;
-            }
-
-            const type = document.getElementById('form-type').value;
-            const server = Number(document.getElementById('form-server').value);
-            const status = document.getElementById('form-status').value;
-            const reason = document.getElementById('form-reason').value;
-            
-            const formData = {
-                account: document.getElementById('f-account').value,
-                ip: document.getElementById('f-ip').value,
-                proofs: document.getElementById('f-proofs').value,
-                email: document.getElementById('f-email').value,
-                serial: document.getElementById('f-serial').value,
-                launcher: document.getElementById('f-launcher').value,
-            };
-
-            const phoneEl = document.getElementById('f-phone');
-            if (phoneEl) formData.phone = phoneEl.value;
-
-            const newEmailEl = document.getElementById('f-new-email');
-            if (newEmailEl) formData.newEmail = newEmailEl.value;
-
+            if (!tgPlayer && !ticket && !opName && !opTg) { alert("Заповніть хоча б одне поле для зв'язку!"); return; }
+            const type = document.getElementById('form-type').value, server = Number(document.getElementById('form-server').value), status = document.getElementById('form-status').value, reason = document.getElementById('form-reason').value;
+            const formData = { account: document.getElementById('f-account').value, ip: document.getElementById('f-ip').value, proofs: document.getElementById('f-proofs').value, email: document.getElementById('f-email').value, serial: document.getElementById('f-serial').value, launcher: document.getElementById('f-launcher').value };
+            if (document.getElementById('f-phone')) formData.phone = document.getElementById('f-phone').value;
+            if (document.getElementById('f-new-email')) formData.newEmail = document.getElementById('f-new-email').value;
             const imageInput = document.getElementById('form-images');
-
-            const saveRecord = (imagesArray) => {
-                const srvObj = servers[server - 1];
-                const newForm = {
-                    id: Date.now(),
-                    type,
-                    server,
-                    serverName: srvObj.name,
-                    serverColor: srvObj.color,
-                    serverNum: srvObj.num,
-                    contacts: { tgPlayer, ticket, opName, opTg },
-                    status,
-                    reason: status === 'Відмовлена' ? reason : '',
-                    formData,
-                    images: imagesArray || [],
-                    date: new Date().toLocaleString()
-                };
-
-                forms.unshift(newForm);
-                localStorage.setItem('ukraine_gta_forms', JSON.stringify(forms));
-                closeModal();
-                renderForms();
+            const save = async (imgs) => {
+                await fetch('/api/forms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, server, contacts: { tgPlayer, ticket, opName, opTg }, status, reason: status === 'Відмовлена' ? reason : '', formData, images: imgs }) });
+                await loadFormsFromServer(); closeModal(); renderForms();
             };
-
             if (imageInput.files && imageInput.files.length > 0) {
-                let processed = 0;
-                let imagesArray = [];
-                Array.from(imageInput.files).forEach(file => {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        imagesArray.push(e.target.result);
-                        processed++;
-                        if (processed === imageInput.files.length) saveRecord(imagesArray);
-                    };
-                    reader.readAsDataURL(file);
+                let imgs = [], proc = 0;
+                Array.from(imageInput.files).forEach(f => {
+                    const r = new FileReader();
+                    r.onload = e => { imgs.push(e.target.result); proc++; if (proc === imageInput.files.length) save(imgs); };
+                    r.readAsDataURL(f);
                 });
-            } else {
-                saveRecord([]);
-            }
+            } else { save([]); }
         }
-
-        function deleteForm(id) {
-            if (confirm("Видалити цю форму?")) {
-                forms = forms.filter(f => f.id !== id);
-                localStorage.setItem('ukraine_gta_forms', JSON.stringify(forms));
-                renderForms();
-            }
+        async function deleteForm(id) {
+            if (confirm("Видалити форму?")) { await fetch(`/api/forms/${id}`, { method: 'DELETE' }); await loadFormsFromServer(); renderForms(); }
         }
-
-        function updateStatus(id, newStatus) {
-            const form = forms.find(f => f.id === id);
-            if (!form) return;
-
+        async function updateStatus(id, newStatus) {
+            let reason = '';
             if (newStatus === 'Відмовлена') {
-                const reason = prompt("Вкажіть обов'язкову причину відмови:");
-                if (!reason || reason.trim() === "") {
-                    alert("Причина відмови обов'язкова!");
-                    renderForms();
-                    return;
-                }
-                form.reason = reason;
-            } else {
-                form.reason = '';
+                reason = prompt("Причина відмови:");
+                if (!reason) { renderForms(); return; }
             }
-
-            form.status = newStatus;
-            localStorage.setItem('ukraine_gta_forms', JSON.stringify(forms));
-            renderForms();
+            await fetch(`/api/forms/${id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus, reason }) });
+            await loadFormsFromServer(); renderForms();
         }
-
         function renderForms() {
-            const container = document.getElementById('forms-container');
-            const emptyState = document.getElementById('empty-state');
-            container.innerHTML = '';
-
+            const c = document.getElementById('forms-container'), empty = document.getElementById('empty-state');
+            c.innerHTML = '';
             let filtered = forms;
-            if (currentFilter !== 'all') {
-                filtered = filtered.filter(f => f.server === Number(currentFilter));
-            }
-            if (currentStatusFilter !== 'all') {
-                filtered = filtered.filter(f => f.status === currentStatusFilter);
-            }
-
-            if (filtered.length === 0) {
-                emptyState.classList.remove('hidden');
-                return;
-            } else {
-                emptyState.classList.add('hidden');
-            }
-
+            if (currentFilter !== 'all') filtered = filtered.filter(f => f.server === Number(currentFilter));
+            if (currentStatusFilter !== 'all') filtered = filtered.filter(f => f.status === currentStatusFilter);
+            if (filtered.length === 0) { empty.classList.remove('hidden'); return; } else { empty.classList.add('hidden'); }
             filtered.forEach(f => {
-                let badge = f.status === 'На розгляді' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
-                            f.status === 'Прийнята' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-                            'bg-rose-500/20 text-rose-400 border-rose-500/30';
-
-                const card = document.createElement('div');
-                card.className = "bg-slate-800 border border-slate-700 rounded-xl p-5 flex flex-col justify-between shadow-lg";
-                
-                let contactsHtml = `<div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/60 space-y-1 mb-3 text-xs">`;
-                if (f.contacts.tgPlayer) contactsHtml += `<p><strong class="text-slate-400">TG гравця:</strong> <span class="text-blue-300 select-all">${f.contacts.tgPlayer}</span></p>`;
-                if (f.contacts.ticket) contactsHtml += `<p><strong class="text-slate-400">Тікет:</strong> <span class="text-white select-all font-medium">${f.contacts.ticket}</span></p>`;
-                if (f.contacts.opName) contactsHtml += `<p><strong class="text-slate-400">Оператор:</strong> <span class="text-slate-200">${f.contacts.opName}</span></p>`;
-                if (f.contacts.opTg) contactsHtml += `<p><strong class="text-slate-400">TG оператора:</strong> <span class="text-blue-300 select-all">${f.contacts.opTg}</span></p>`;
-                contactsHtml += `</div>`;
-
-                let details = `
-                    <p><strong class="text-slate-400">Гравець:</strong> <span class="text-white">${f.formData.account}</span></p>
-                    <p><strong class="text-slate-400">IP:</strong> <span class="text-slate-300 select-all">${f.formData.ip}</span></p>
-                    <p><strong class="text-slate-400">Докази:</strong> <span class="text-slate-300">${f.formData.proofs}</span></p>
-                    <p><strong class="text-slate-400">Пошта:</strong> <span class="text-slate-300">${f.formData.email}</span></p>
-                `;
-                if (f.formData.newEmail) details += `<p><strong class="text-blue-400">Нова пошта:</strong> <span class="text-white">${f.formData.newEmail}</span></p>`;
-                details += `
-                    <p><strong class="text-slate-400">Serial:</strong> <span class="text-xs font-mono text-slate-300 select-all">${f.formData.serial}</span></p>
-                    <p><strong class="text-slate-400">Launcher:</strong> <span class="text-xs font-mono text-slate-300 select-all">${f.formData.launcher}</span></p>
-                `;
-                if (f.formData.phone) details += `<p><strong class="text-slate-400">Телефон (4 цифри):</strong> <span class="text-white">${f.formData.phone}</span></p>`;
-
+                const srv = servers[f.server - 1];
+                let cnt = `<div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/60 space-y-1 mb-3 text-xs">`;
+                if (f.contacts.tgPlayer) cnt += `<p><strong class="text-slate-400">TG гравця:</strong> ${f.contacts.tgPlayer}</p>`;
+                if (f.contacts.ticket) cnt += `<p><strong class="text-slate-400">Тікет:</strong> ${f.contacts.ticket}</p>`;
+                if (f.contacts.opName) cnt += `<p><strong class="text-slate-400">Оператор:</strong> ${f.contacts.opName}</p>`;
+                if (f.contacts.opTg) cnt += `<p><strong class="text-slate-400">TG оператора:</strong> ${f.contacts.opTg}</p>`;
+                cnt += `</div>`;
+                let dt = `<p><strong>Гравець:</strong> ${f.formData.account}</p><p><strong>IP:</strong> ${f.formData.ip}</p><p><strong>Докази:</strong> ${f.formData.proofs}</p><p><strong>Пошта:</strong> ${f.formData.email}</p>`;
+                if (f.formData.newEmail) dt += `<p class="text-blue-400"><strong>Нова пошта:</strong> ${f.formData.newEmail}</p>`;
+                dt += `<p><strong>Serial:</strong> <span class="font-mono text-xs">${f.formData.serial}</span></p><p><strong>Launcher:</strong> <span class="font-mono text-xs">${f.formData.launcher}</span></p>`;
+                if (f.formData.phone) dt += `<p><strong>Телефон:</strong> ${f.formData.phone}</p>`;
                 let imgs = '';
                 if (f.images && f.images.length > 0) {
                     imgs = `<div class="grid grid-cols-3 gap-2 my-3">`;
-                    f.images.forEach(img => {
-                        imgs += `<img src="${img}" onclick="openImageModal('${img}')" class="w-full h-20 object-cover rounded-lg cursor-pointer hover:opacity-90 border border-slate-700">`;
-                    });
+                    f.images.forEach(img => imgs += `<img src="${img}" onclick="document.getElementById('modal-img').src='${img}';document.getElementById('image-modal').classList.remove('hidden')" class="w-full h-20 object-cover rounded-lg cursor-pointer border border-slate-700">`);
                     imgs += `</div>`;
                 }
-
-                card.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-start mb-3 gap-2">
-                            <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">${f.type}</span>
-                            <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-300 whitespace-nowrap flex items-center gap-1.5"><span class="flex items-center">${getShieldSvg(f.serverColor || '#3b82f6', f.serverNum || '01')}</span> <span>${f.server}. ${f.serverName}</span></span>
-                        </div>
-                        ${contactsHtml}
-                        <div class="space-y-1.5 text-sm mb-3">
-                            ${details}
-                            <p class="pt-1"><strong class="text-slate-400">Дата:</strong> <span class="text-slate-400 text-xs">${f.date}</span></p>
-                            ${f.reason ? `<p class="bg-rose-950/40 border border-rose-900/50 p-2 rounded-lg text-rose-300 mt-2"><strong class="text-rose-400">Причина:</strong> ${f.reason}</p>` : ''}
-                        </div>
-                        ${imgs}
-                    </div>
-                    <div class="pt-3 border-t border-slate-700 flex items-center justify-between">
-                        <select onchange="updateStatus(${f.id}, this.value)" class="text-xs bg-slate-900 border border-slate-700 rounded-lg p-1.5 font-semibold ${badge} focus:outline-none cursor-pointer">
-                            <option value="На розгляді" ${f.status === 'На розгляді' ? 'selected' : ''}>⏳ На розгляді</option>
-                            <option value="Прийнята" ${f.status === 'Прийнята' ? 'selected' : ''}>✅ Прийнята</option>
-                            <option value="Відмовлена" ${f.status === 'Відмовлена' ? 'selected' : ''}>❌ Відмовлена</option>
-                        </select>
-                        <button onclick="deleteForm(${f.id})" class="text-slate-500 hover:text-rose-400 text-xs transition px-2 py-1">Видалити</button>
-                    </div>
-                `;
-                container.appendChild(card);
+                c.innerHTML += `<div class="bg-slate-800 border border-slate-700 rounded-xl p-5 flex flex-col justify-between shadow-lg"><div><div class="flex justify-between items-start mb-3 gap-2"><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-400 border">${f.type}</span><span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-300 flex items-center gap-1.5">${getShieldSvg(srv.color, srv.num)} ${f.server}. ${srv.name}</span></div>${cnt}<div class="space-y-1.5 text-sm mb-3">${dt}<p class="text-slate-400 text-xs pt-1">${f.date}</p>${f.reason ? `<p class="bg-rose-950/40 p-2 rounded-lg text-rose-300 mt-2"><strong>Причина:</strong> ${f.reason}</p>` : ''}</div>${imgs}</div><div class="pt-3 border-t border-slate-700 flex items-center justify-between"><select onchange="updateStatus(${f.id}, this.value)" class="text-xs bg-slate-900 border border-slate-700 rounded-lg p-1.5 font-semibold cursor-pointer"><option value="На розгляді" ${f.status==='На розгляді'?'selected':''}>⏳ На розгляді</option><option value="Прийнята" ${f.status==='Прийнята'?'selected':''}>✅ Прийнята</option><option value="Відмовлена" ${f.status==='Відмовлена'?'selected':''}>❌ Відмовлена</option></select><button onclick="deleteForm(${f.id})" class="text-slate-500 hover:text-rose-400 text-xs px-2 py-1 cursor-pointer">Видалити</button></div></div>`;
             });
         }
-
-        function openImageModal(src) {
-            document.getElementById('modal-img').src = src;
-            document.getElementById('image-modal').classList.remove('hidden');
-        }
-
-        function closeImageModal() {
-            document.getElementById('image-modal').classList.add('hidden');
-        }
+        function closeImageModal() { document.getElementById('image-modal').classList.add('hidden'); }
         function verifyCaptcha() {
-            const recaptchaResponse = grecaptcha.getResponse();
-            
-            if (!recaptchaResponse) {
-                alert("Будь ласка, підтвердіть капчу («Я не робот»)!");
-                return;
-            }
-
-            // Ховаємо екран входу і показуємо основний сайт
-            document.getElementById('auth-screen').classList.add('hidden');
-            document.getElementById('main-app').classList.remove('hidden');
+            if (!grecaptcha.getResponse()) { alert("Підтвердіть капчу!"); return; }
+            document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('main-app').classList.remove('hidden');
         }
     </script>
 </body>
 </html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/forms', methods=['GET'])
+def get_forms():
+    conn = get_db_connection()
+    rows = conn.execute('SELECT * FROM forms ORDER BY id DESC').fetchall()
+    conn.close()
+    return jsonify([{
+        'id': r['id'], 'type': r['type'], 'server': r['server'], 'contacts': json.loads(r['contacts']),
+        'status': r['status'], 'reason': r['reason'], 'formData': json.loads(r['form_data']),
+        'images': json.loads(r['images']), 'date': r['date']
+    } for r in rows])
+
+@app.route('/api/forms', methods=['POST'])
+def add_form():
+    data = request.json
+    conn = get_db_connection()
+    srv = SERVERS[int(data.get('server')) - 1]
+    conn.execute('INSERT INTO forms (type, server, server_name, server_color, server_num, contacts, status, reason, form_data, images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                 (data.get('type'), int(data.get('server')), srv['name'], srv['color'], srv['num'], json.dumps(data.get('contacts')), data.get('status'), data.get('reason', ''), json.dumps(data.get('formData')), json.dumps(data.get('images', []))))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/forms/<int:form_id>', methods=['DELETE'])
+def delete_form(form_id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM forms WHERE id = ?', (form_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/forms/<int:form_id>/status', methods=['PATCH'])
+def update_form_status(form_id):
+    d = request.json
+    conn = get_db_connection()
+    conn.execute('UPDATE forms SET status = ?, reason = ? WHERE id = ?', (d.get('status'), d.get('reason', ''), form_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True, port=5000)
