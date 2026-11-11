@@ -938,171 +938,54 @@
 
 
 
-        function renderForms() {
+function renderForms() {
+    const container = document.getElementById('forms-container');
+    if (!container) return;
 
-            const container = document.getElementById('forms-container');
+    container.innerHTML = '';
+    
+    // Припустимо, що forms — це масив твоїх збережених даних з localStorage
+    if (forms.length === 0) {
+        container.innerHTML = '<p class="text-slate-400 text-center py-8">Немає збережених форм.</p>';
+        return;
+    }
 
-            const emptyState = document.getElementById('empty-state');
-
-            container.innerHTML = '';
-
-
-
-            let filtered = forms;
-
-            if (currentFilter !== 'all') {
-
-                filtered = filtered.filter(f => f.server === Number(currentFilter));
-
-            }
-
-            if (currentStatusFilter !== 'all') {
-
-                filtered = filtered.filter(f => f.status === currentStatusFilter);
-
-            }
-
-
-
-            if (filtered.length === 0) {
-
-                emptyState.classList.remove('hidden');
-
-                return;
-
-            } else {
-
-                emptyState.classList.add('hidden');
-
-            }
-
-
-
-            filtered.forEach(f => {
-
-                let badge = f.status === 'На розгляді' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
-
-                            f.status === 'Прийнята' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-
-                            'bg-rose-500/20 text-rose-400 border-rose-500/30';
-
-
-
-                const card = document.createElement('div');
-
-                card.className = "bg-slate-800 border border-slate-700 rounded-xl p-5 flex flex-col justify-between shadow-lg";
-
+    forms.forEach((f, index) => {
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg space-y-4';
+        
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <span class="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full">${f.type || 'Форма'}</span>
+                <span class="text-xs text-slate-400">${f.date || ''}</span>
+            </div>
+            
+            <div class="space-y-2 text-sm text-slate-300">
+                <p><strong class="text-slate-400">TG гравця:</strong> <span class="text-blue-300 break-all">${f.contacts?.tgPlayer || '-'}</span></p>
+                <p><strong class="text-slate-400">Тікет:</strong> <span class="text-white break-all font-medium">${f.contacts?.ticket || '-'}</span></p>
+                <p><strong class="text-slate-400">Оператор:</strong> <span class="text-slate-300 break-all">${f.operator || '-'}</span></p>
+                <p><strong class="text-slate-400">TG оператора:</strong> <span class="text-slate-300 break-all">${f.contacts?.tgOperator || '-'}</span></p>
                 
+                <hr class="border-slate-700 my-2">
+                
+                <p><strong class="text-slate-400">Гравець:</strong> <span class="text-white break-all">${f.formData?.account || '-'}</span></p>
+                <p><strong class="text-slate-400">IP:</strong> <span class="text-slate-300 break-all">${f.formData?.ip || '-'}</span></p>
+                <p><strong class="text-slate-400">Докази:</strong> <span class="text-slate-300 break-all">${f.formData?.proofs || '-'}</span></p>
+                <p><strong class="text-slate-400">Пошта:</strong> <span class="text-slate-300 break-all">${f.formData?.email || '-'}</span></p>
+                <p><strong class="text-slate-400">Serial:</strong> <span class="text-slate-300 break-all">${f.formData?.serial || '-'}</span></p>
+                <p><strong class="text-slate-400">Launcher:</strong> <span class="text-slate-300 break-all">${f.formData?.launcher || '-'}</span></p>
+                <p><strong class="text-slate-400">Телефон (4 цифри):</strong> <span class="text-slate-300 break-all">${f.formData?.phone || '-'}</span></p>
+            </div>
 
-                let contactsHtml = `<div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/60 space-y-1 mb-3 text-xs">`;
-
-                if (f.contacts.tgPlayer) contactsHtml += `<p><strong class="text-slate-400">TG гравця:</strong> <span class="text-blue-300 select-all">${f.contacts.tgPlayer}</span></p>`;
-
-                if (f.contacts.ticket) contactsHtml += `<p><strong class="text-slate-400">Тікет:</strong> <span class="text-white select-all font-medium">${f.contacts.ticket}</span></p>`;
-
-                if (f.contacts.opName) contactsHtml += `<p><strong class="text-slate-400">Оператор:</strong> <span class="text-slate-200">${f.contacts.opName}</span></p>`;
-
-                if (f.contacts.opTg) contactsHtml += `<p><strong class="text-slate-400">TG оператора:</strong> <span class="text-blue-300 select-all">${f.contacts.opTg}</span></p>`;
-
-                contactsHtml += `</div>`;
-
-
-
-                let details = `
-
-                    <p><strong class="text-slate-400">Гравець:</strong> <span class="text-white">${f.formData.account}</span></p>
-
-                    <p><strong class="text-slate-400">IP:</strong> <span class="text-slate-300 select-all">${f.formData.ip}</span></p>
-
-                    <p><strong class="text-slate-400">Докази:</strong> <span class="text-slate-300">${f.formData.proofs}</span></p>
-
-                    <p><strong class="text-slate-400">Пошта:</strong> <span class="text-slate-300">${f.formData.email}</span></p>
-
-                `;
-
-                if (f.formData.newEmail) details += `<p><strong class="text-blue-400">Нова пошта:</strong> <span class="text-white">${f.formData.newEmail}</span></p>`;
-
-                details += `
-
-                    <p><strong class="text-slate-400">Serial:</strong> <span class="text-xs font-mono text-slate-300 select-all">${f.formData.serial}</span></p>
-
-                    <p><strong class="text-slate-400">Launcher:</strong> <span class="text-xs font-mono text-slate-300 select-all">${f.formData.launcher}</span></p>
-
-                `;
-
-                if (f.formData.phone) details += `<p><strong class="text-slate-400">Телефон (4 цифри):</strong> <span class="text-white">${f.formData.phone}</span></p>`;
-
-
-
-                let imgs = '';
-
-                if (f.images && f.images.length > 0) {
-
-                    imgs = `<div class="grid grid-cols-3 gap-2 my-3">`;
-
-                    f.images.forEach(img => {
-
-                        imgs += `<img src="${img}" onclick="openImageModal('${img}')" class="w-full h-20 object-cover rounded-lg cursor-pointer hover:opacity-90 border border-slate-700">`;
-
-                    });
-
-                    imgs += `</div>`;
-
-                }
-
-
-
-                card.innerHTML = `
-
-                    <div>
-
-                        <div class="flex justify-between items-start mb-3 gap-2">
-
-                            <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">${f.type}</span>
-
-                            <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700 text-slate-300 whitespace-nowrap flex items-center gap-1.5"><span class="flex items-center">${getShieldSvg(f.serverColor || '#3b82f6', f.serverNum || '01')}</span> <span>${f.server}. ${f.serverName}</span></span>
-
-                        </div>
-
-                        ${contactsHtml}
-
-                        <div class="space-y-1.5 text-sm mb-3">
-
-                            ${details}
-
-                            <p class="pt-1"><strong class="text-slate-400">Дата:</strong> <span class="text-slate-400 text-xs">${f.date}</span></p>
-
-                            ${f.reason ? `<p class="bg-rose-950/40 border border-rose-900/50 p-2 rounded-lg text-rose-300 mt-2"><strong class="text-rose-400">Причина:</strong> ${f.reason}</p>` : ''}
-
-                        </div>
-
-                        ${imgs}
-
-                    </div>
-
-                    <div class="pt-3 border-t border-slate-700 flex items-center justify-between">
-
-                        <select onchange="updateStatus(${f.id}, this.value)" class="text-xs bg-slate-900 border border-slate-700 rounded-lg p-1.5 font-semibold ${badge} focus:outline-none cursor-pointer">
-
-                            <option value="На розгляді" ${f.status === 'На розгляді' ? 'selected' : ''}>⏳ На розгляді</option>
-
-                            <option value="Прийнята" ${f.status === 'Прийнята' ? 'selected' : ''}>✅ Прийнята</option>
-
-                            <option value="Відмовлена" ${f.status === 'Відмовлена' ? 'selected' : ''}>❌ Відмовлена</option>
-
-                        </select>
-
-                        <button onclick="deleteForm(${f.id})" class="text-slate-500 hover:text-rose-400 text-xs transition px-2 py-1">Видалити</button>
-
-                    </div>
-
-                `;
-
-                container.appendChild(card);
-
-            });
-
-        }
+            <div class="flex justify-between items-center pt-2">
+                <span class="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-lg">На розгляді</span>
+                <button onclick="deleteForm(${index})" class="text-xs text-red-400 hover:text-red-300 transition cursor-pointer">Видалити</button>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+}
 
 
 
