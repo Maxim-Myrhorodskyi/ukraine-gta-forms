@@ -962,6 +962,7 @@ function renderForms() {
                 const card = document.createElement('div');
                 card.className = 'bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg space-y-4';
                 
+                // Перевірка чи форма закрита (Прийнята або Відмовлена)
                 const isClosed = f.status === 'Прийнята' || f.status === 'Відмовлена';
 
                 let statusBadge = '<span class="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-lg">На розгляді</span>';
