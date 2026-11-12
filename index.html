@@ -939,71 +939,90 @@
 
 
 function renderForms() {
-    const container = document.getElementById('forms-container');
-    if (!container) return;
+            const container = document.getElementById('forms-container');
+            const emptyState = document.getElementById('empty-state');
+            if (!container) return;
 
-    container.innerHTML = '';
-    
-    if (forms.length === 0) {
-        container.innerHTML = '<p class="text-slate-400 text-center py-8">Немає збережених форм.</p>';
-        return;
-    }
+            container.innerHTML = '';
 
-    forms.forEach((f, index) => {
-        const card = document.createElement('div');
-        card.className = 'bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg space-y-4';
-        
-        // Перевіряємо, чи форма заблокована (якщо статус вже Прийнято або Відмовлено)
-        const isClosed = f.status === 'Прийнято' || f.status === 'Відмовлено';
-        
-        // Визначаємо колір бейджа статусу
-        let statusBadge = '<span class="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-lg">На розгляді</span>';
-        if (f.status === 'Прийнято') {
-            statusBadge = '<span class="text-xs px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg">Прийнято</span>';
-        } else if (f.status === 'Відмовлено') {
-            statusBadge = '<span class="text-xs px-2.5 py-1 bg-red-500/20 text-red-400 rounded-lg">Відмовлено</span>';
+            let filteredForms = forms.filter(f => {
+                const matchesServer = currentFilter === 'all' || f.server === currentFilter;
+                const matchesStatus = currentStatusFilter === 'all' || f.status === currentStatusFilter;
+                return matchesServer && matchesStatus;
+            });
+
+            if (filteredForms.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filteredForms.forEach((f) => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg space-y-4';
+                
+                const isClosed = f.status === 'Прийнята' || f.status === 'Відмовлена';
+
+                let statusBadge = '<span class="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-lg">На розгляді</span>';
+                if (f.status === 'Прийнята') {
+                    statusBadge = '<span class="text-xs px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg">Прийнята</span>';
+                } else if (f.status === 'Відмовлена') {
+                    statusBadge = `<span class="text-xs px-2.5 py-1 bg-rose-500/20 text-rose-400 rounded-lg" title="${f.reason || ''}">Відмовлена</span>`;
+                }
+                
+                let imagesHtml = '';
+                if (f.images && f.images.length > 0) {
+                    imagesHtml = '<div class="flex gap-2 flex-wrap pt-2">';
+                    f.images.forEach(img => {
+                        imagesHtml += `<img src="${img}" onclick="openImageModal('${img}')" class="w-16 h-16 object-cover rounded-lg border border-slate-700 cursor-pointer hover:opacity-80 transition">`;
+                    });
+                    imagesHtml += '</div>';
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <span class="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full">${f.type || 'Форма'}</span>
+                        <span class="text-xs text-slate-400">${f.date || ''}</span>
+                    </div>
+                    
+                    <div class="space-y-2 text-sm text-slate-300">
+                        <p><strong class="text-slate-400">TG гравця:</strong> <span class="text-blue-300 break-all">${f.contacts?.tgPlayer || '-'}</span></p>
+                        <p><strong class="text-slate-400">Тікет:</strong> <span class="text-white break-all font-medium">${f.contacts?.ticket || '-'}</span></p>
+                        <p><strong class="text-slate-400">Оператор:</strong> <span class="text-slate-300 break-all">${f.contacts?.opName || '-'}</span></p>
+                        <p><strong class="text-slate-400">TG оператора:</strong> <span class="text-slate-300 break-all">${f.contacts?.opTg || '-'}</span></p>
+                        
+                        <hr class="border-slate-700 my-2">
+                        
+                        <p><strong class="text-slate-400">Гравець:</strong> <span class="text-white break-all">${f.formData?.account || '-'}</span></p>
+                        <p><strong class="text-slate-400">IP:</strong> <span class="text-slate-300 break-all">${f.formData?.ip || '-'}</span></p>
+                        <p><strong class="text-slate-400">Докази:</strong> <span class="text-slate-300 break-all">${f.formData?.proofs || '-'}</span></p>
+                        <p><strong class="text-slate-400">Пошта:</strong> <span class="text-slate-300 break-all">${f.formData?.email || '-'}</span></p>
+                        ${f.formData?.newEmail ? `<p><strong class="text-blue-400">Нова пошта:</strong> <span class="text-white break-all">${f.formData.newEmail}</span></p>` : ''}
+                        <p><strong class="text-slate-400">Serial:</strong> <span class="text-slate-300 break-all">${f.formData?.serial || '-'}</span></p>
+                        <p><strong class="text-slate-400">Launcher:</strong> <span class="text-slate-300 break-all">${f.formData?.launcher || '-'}</span></p>
+                        ${f.formData?.phone ? `<p><strong class="text-slate-400">Телефон (4 цифри):</strong> <span class="text-slate-300 break-all">${f.formData.phone}</span></p>` : ''}
+                        ${f.reason ? `<p class="text-rose-400 text-xs mt-2"><strong>Причина відмови:</strong> ${f.reason}</p>` : ''}
+                    </div>
+
+                    ${imagesHtml}
+
+                    <div class="flex justify-between items-center pt-2">
+                        <div class="flex items-center space-x-2">
+                            ${statusBadge}
+                            <select onchange="updateStatus(${f.id}, this.value)" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded px-2 py-1 outline-none ${isClosed ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" ${isClosed ? 'disabled' : ''}>
+                                <option value="На розгляді" ${f.status === 'На розгляді' ? 'selected' : ''}>На розгляді</option>
+                                <option value="Прийнята" ${f.status === 'Прийнята' ? 'selected' : ''}>Прийнята</option>
+                                <option value="Відмовлена" ${f.status === 'Відмовлена' ? 'selected' : ''}>Відмовлена</option>
+                            </select>
+                        </div>
+                        <button onclick="deleteForm(${f.id})" class="text-xs text-red-400 hover:text-red-300 transition cursor-pointer">Видалити</button>
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            });
         }
-
-        card.innerHTML = `
-            <div class="flex justify-between items-start">
-                <span class="px-3 py-1 bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-full">${f.type || 'Форма'}</span>
-                <span class="text-xs text-slate-400">${f.date || ''}</span>
-            </div>
-            
-            <div class="space-y-2 text-sm text-slate-300">
-                <p><strong class="text-slate-400">TG гравця:</strong> <span class="text-blue-300 break-all">${f.contacts?.tgPlayer || '-'}</span></p>
-                <p><strong class="text-slate-400">Тікет:</strong> <span class="text-white break-all font-medium">${f.contacts?.ticket || '-'}</span></p>
-                <p><strong class="text-slate-400">Оператор:</strong> <span class="text-slate-300 break-all">${f.operator || '-'}</span></p>
-                <p><strong class="text-slate-400">TG оператора:</strong> <span class="text-slate-300 break-all">${f.contacts?.tgOperator || '-'}</span></p>
-                
-                <hr class="border-slate-700 my-2">
-                
-                <p><strong class="text-slate-400">Гравець:</strong> <span class="text-white break-all">${f.formData?.account || '-'}</span></p>
-                <p><strong class="text-slate-400">IP:</strong> <span class="text-slate-300 break-all">${f.formData?.ip || '-'}</span></p>
-                <p><strong class="text-slate-400">Докази:</strong> <span class="text-slate-300 break-all">${f.formData?.proofs || '-'}</span></p>
-                <p><strong class="text-slate-400">Пошта:</strong> <span class="text-slate-300 break-all">${f.formData?.email || '-'}</span></p>
-                <p><strong class="text-slate-400">Serial:</strong> <span class="text-slate-300 break-all">${f.formData?.serial || '-'}</span></p>
-                <p><strong class="text-slate-400">Launcher:</strong> <span class="text-slate-300 break-all">${f.formData?.launcher || '-'}</span></p>
-                <p><strong class="text-slate-400">Телефон (4 цифри):</strong> <span class="text-slate-300 break-all">${f.formData?.phone || '-'}</span></p>
-            </div>
-
-            <div class="flex justify-between items-center pt-2">
-                <div class="flex items-center space-x-2">
-                    ${statusBadge}
-                    <!-- Випадаючий список для зміни статусу (блокується, якщо вже закрито) -->
-                    <select onchange="updateStatus(${index}, this.value)" class="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded px-2 py-1 outline-none ${isClosed ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" ${isClosed ? 'disabled' : ''}>
-                        <option value="На розгляді" ${f.status === 'На розгляді' ? 'selected' : ''}>На розгляді</option>
-                        <option value="Прийнято" ${f.status === 'Прийнято' ? 'selected' : ''}>Прийнято</option>
-                        <option value="Відмовлено" ${f.status === 'Відмовлено' ? 'selected' : ''}>Відмовлено</g5:option>
-                    </select>
-                </div>
-                <button onclick="deleteForm(${index})" class="text-xs text-red-400 hover:text-red-300 transition cursor-pointer">Видалити</button>
-            </div>
-        `;
-        
-        container.appendChild(card);
-    });
-}
 
 // Функція оновлення статусу, яка зберігає вибір у localStorage
 function updateStatus(index, newStatus) {
